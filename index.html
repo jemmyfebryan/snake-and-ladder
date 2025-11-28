@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snakes & Ladders 1v1</title>
+    <style>
+        :root {
+            --p1-color: #3b82f6;
+            --p2-color: #ef4444;
+            --board-bg: #fdfdfd;
+            --tile-1: #e0f2fe;
+            --tile-2: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f4f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        /* --- Lobby Styles --- */
+        #lobby {
+            text-align: center;
+            padding: 50px;
+        }
+        
+        input {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin-right: 10px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.1s;
+        }
+
+        button:active { transform: scale(0.98); }
+        .btn-primary { background: #10b981; color: white; }
+        .btn-secondary { background: #6366f1; color: white; }
+
+        /* --- Game Styles --- */
+        #game-ui {
+            display: none; /* Initially hidden */
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .board-container {
+            position: relative;
+            width: 500px;
+            height: 500px;
+            border: 4px solid #333;
+            background: var(--board-bg);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            width: 100%;
+            height: 100%;
+        }
+
+        .tile {
+            border: 1px solid rgba(0,0,0,0.1);
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            font-size: 10px;
+            padding: 2px;
+            position: relative;
+            color: #666;
+        }
+
+        .tile:nth-child(even) { background-color: var(--tile-1); }
+        .tile:nth-child(odd) { background-color: var(--tile-2); }
+
+        #board-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .pawn {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid white;
+            position: absolute;
+            transition: top 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275), left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: white;
+            font-weight: bold;
+        }
+
+        .pawn.selectable {
+            cursor: pointer;
+            box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.6);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes rollShake {
+            0% { transform: rotate(0deg); }
+            25% { transform: rotate(10deg); }
+            50% { transform: rotate(-10deg); }
+            75% { transform: rotate(5deg); }
+            100% { transform: rotate(0deg); }
+        }
+
+        .rolling {
+            animation: rollShake 0.2s infinite;
+        }
+
+        .p1-pawn { background-color: var(--p1-color); }
+        .p2-pawn { background-color: var(--p2-color); }
+
+        .controls {
+            flex: 1;
+            min-width: 300px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+        }
+
+        .status-box {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            background: white;
+            border-left: 5px solid #ccc;
+        }
+
+        .status-box.active-turn { border-left-color: #10b981; }
+        .status-box.wait-turn { border-left-color: #f59e0b; }
+
+        .dice-area {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .dice-val {
+            font-size: 40px;
+            font-weight: bold;
+            margin: 10px 0;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #logs {
+            height: 200px;
+            overflow-y: auto;
+            background: #1e293b;
+            color: #ccc;
+            padding: 10px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .room-tag {
+            background: #ddd;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .pawn-legend {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- LOBBY SCREEN -->
+        <div id="lobby">
+            <h1>🐍 Snakes & Ladders Online 🪜</h1>
+            <div style="margin: 40px 0;">
+                <button class="btn-primary" onclick="createGame()">Create New Room</button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: center;">
+                <span style="margin: 0 15px; color: #888;">OR</span>
+            </div>
+            <div style="margin: 40px 0;">
+                <input type="text" id="joinRoomId" placeholder="Enter Room ID">
+                <button class="btn-secondary" onclick="joinGame()">Join Room</button>
+            </div>
+            <p id="lobby-error" style="color: red;"></p>
+        </div>
+
+        <!-- GAME SCREEN -->
+        <div id="game-ui">
+            <div class="board-container">
+                <div class="grid" id="grid">
+                    <!-- Tiles Generated by JS -->
+                </div>
+                <svg id="board-svg" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Snakes/Ladders Drawn by JS -->
+                </svg>
+                <!-- Pawns container -->
+                <div id="pawns-layer"></div>
+            </div>
+
+            <div class="controls">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3>Room: <span id="display-room-id" class="room-tag">...</span></h3>
+                    <div id="player-indicator">You: Player ?</div>
+                </div>
+                
+                <div id="status-panel" class="status-box">
+                    <h2 id="turn-text">Waiting for opponent...</h2>
+                    <p id="instruction-text">Share the Room ID to start.</p>
+                </div>
+
+                <div class="dice-area">
+                    <div class="dice-val" id="dice-display">🎲</div>
+                    <button id="roll-btn" class="btn-primary" onclick="rollDice()" disabled>Roll Dice</button>
+                </div>
+
+                <h4>Game Log</h4>
+                <div id="logs"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Using relative path so it communicates with the origin server
+        const API_URL = "";
+        
+        let roomId = null;
+        let playerToken = null;
+        let gameState = null;
+        let myPlayerIndex = -1; // 0 or 1
+        let pollingInterval = null;
+        let isRolling = false;
+
+        function getCoords(tileNum) {
+            if (tileNum <= 0) return { x: -20, y: 480 };
+            if (tileNum > 100) tileNum = 100;
+            const row = Math.floor((tileNum - 1) / 10);
+            let col = (tileNum - 1) % 10;
+            if (row % 2 !== 0) col = 9 - col;
+            const x = col * 50 + 25;
+            const y = (9 - row) * 50 + 25;
+            return { x, y };
+        }
+
+        function initBoard() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            for (let i = 100; i >= 1; i--) {
+                const div = document.createElement('div');
+                div.className = 'tile';
+                let rowFromTop = Math.floor((100 - i) / 10);
+                let colFromLeft = (100 - i) % 10;
+                let tileVal;
+                if (rowFromTop % 2 === 0) {
+                    tileVal = (10 - rowFromTop) * 10 - colFromLeft;
+                } else {
+                    tileVal = (10 - rowFromTop - 1) * 10 + 1 + colFromLeft;
+                }
+                div.innerText = tileVal;
+                grid.appendChild(div);
+            }
+        }
+
+        async function createGame() {
+            try {
+                const res = await fetch(`${API_URL}/create`, { method: 'POST' });
+                const data = await res.json();
+                enterGame(data.room_id, data.player_token);
+            } catch (e) {
+                alert("Failed to create game");
+            }
+        }
+
+        async function joinGame() {
+            const id = document.getElementById('joinRoomId').value.toUpperCase();
+            if(!id) return;
+            try {
+                const res = await fetch(`${API_URL}/join`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ room_id: id })
+                });
+                if (!res.ok) throw new Error(await res.text());
+                const data = await res.json();
+                enterGame(id, data.player_token);
+            } catch (e) {
+                document.getElementById('lobby-error').innerText = e.message;
+            }
+        }
+
+        function enterGame(room, token) {
+            roomId = room;
+            playerToken = token;
+            
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('game-ui').style.display = 'flex';
+            document.getElementById('display-room-id').innerText = roomId;
+            
+            initBoard();
+            startPolling();
+        }
+
+        function startPolling() {
+            fetchState();
+            pollingInterval = setInterval(fetchState, 1000);
+        }
+
+        async function fetchState() {
+            try {
+                const res = await fetch(`${API_URL}/state/${roomId}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                updateUI(data);
+            } catch (e) {
+                console.error("Polling error", e);
+            }
+        }
+
+        async function rollDice() {
+            const rollBtn = document.getElementById('roll-btn');
+            rollBtn.disabled = true;
+            isRolling = true;
+            
+            // Start visual animation
+            const diceDisplay = document.getElementById('dice-display');
+            diceDisplay.classList.add('rolling');
+            const faces = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+            const animInterval = setInterval(() => {
+                diceDisplay.innerText = faces[Math.floor(Math.random() * faces.length)];
+            }, 100);
+
+            try {
+                await fetch(`${API_URL}/roll`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ room_id: roomId, player_token: playerToken })
+                });
+                // Slight delay to let animation play
+                setTimeout(() => {
+                    clearInterval(animInterval);
+                    diceDisplay.classList.remove('rolling');
+                    isRolling = false;
+                    fetchState();
+                }, 800);
+            } catch(e) {
+                clearInterval(animInterval);
+                diceDisplay.classList.remove('rolling');
+                isRolling = false;
+            }
+        }
+
+        async function movePawn(pawnIdx) {
+            await fetch(`${API_URL}/move`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ room_id: roomId, player_token: playerToken, pawn_index: pawnIdx })
+            });
+            fetchState();
+        }
+
+        let snakeladderDrawn = false;
+
+        function updateUI(state) {
+            gameState = state;
+            myPlayerIndex = state.players.indexOf(playerToken);
+            document.getElementById('player-indicator').innerHTML = `You: <span class="pawn-legend" style="background:${myPlayerIndex === 0 ? 'var(--p1-color)' : 'var(--p2-color)'}"></span>Player ${myPlayerIndex + 1}`;
+
+            if (!snakeladderDrawn && state.board_config) {
+                drawBoardGraphics(state.board_config);
+                snakeladderDrawn = true;
+            }
+
+            const statusPanel = document.getElementById('status-panel');
+            const turnText = document.getElementById('turn-text');
+            const instr = document.getElementById('instruction-text');
+            const rollBtn = document.getElementById('roll-btn');
+            const diceDisplay = document.getElementById('dice-display');
+
+            // Only update dice if not currently animating locally
+            if (!isRolling) {
+                diceDisplay.innerText = state.last_roll ? `🎲 ${state.last_roll}` : '🎲';
+            }
+
+            if (state.status === 'waiting') {
+                turnText.innerText = "Waiting for opponent...";
+                instr.innerText = `Share ID: ${roomId}`;
+                statusPanel.className = 'status-box wait-turn';
+                rollBtn.disabled = true;
+            } else if (state.status === 'finished') {
+                turnText.innerText = state.winner === myPlayerIndex ? "🎉 YOU WON! 🎉" : "💀 YOU LOST";
+                instr.innerText = "Game Over";
+                statusPanel.className = 'status-box ' + (state.winner === myPlayerIndex ? 'active-turn' : 'wait-turn');
+                rollBtn.disabled = true;
+                if(pollingInterval) clearInterval(pollingInterval);
+            } else {
+                const isMyTurn = state.turn_index === myPlayerIndex;
+                statusPanel.className = 'status-box ' + (isMyTurn ? 'active-turn' : 'wait-turn');
+
+                if (isMyTurn) {
+                    if (state.phase === 'ROLL') {
+                        turnText.innerText = "Your Turn";
+                        instr.innerText = "Roll the dice!";
+                        rollBtn.disabled = isRolling; // Disable ONLY if currently rolling
+                    } else {
+                        turnText.innerText = "Select Pawn";
+                        instr.innerText = `You rolled ${state.last_roll}. Click a pawn to move.`;
+                        rollBtn.disabled = true;
+                    }
+                } else {
+                    turnText.innerText = `Player ${state.turn_index + 1}'s Turn`;
+                    instr.innerText = "Please wait...";
+                    rollBtn.disabled = true;
+                }
+            }
+
+            renderPawns(state);
+            renderLogs(state.log);
+        }
+
+        function renderPawns(state) {
+            const container = document.getElementById('pawns-layer');
+            const isMyTurn = state.turn_index === myPlayerIndex;
+            const canMove = isMyTurn && state.phase === 'MOVE';
+
+            // We need to keep track of active pawns to remove old ones if game restarts or logic changes
+            const activeIds = new Set();
+
+            state.positions.forEach((playerPawns, pIdx) => {
+                playerPawns.forEach((tile, pawnIdx) => {
+                    // Don't render finished pawns
+                    if (state.finished_pawns[pIdx][pawnIdx]) {
+                        // Remove if exists
+                        const existing = document.getElementById(`pawn-${pIdx}-${pawnIdx}`);
+                        if(existing) existing.remove();
+                        return;
+                    }
+
+                    const pawnId = `pawn-${pIdx}-${pawnIdx}`;
+                    activeIds.add(pawnId);
+                    
+                    let el = document.getElementById(pawnId);
+                    if (!el) {
+                        el = document.createElement('div');
+                        el.id = pawnId;
+                        el.className = `pawn ${pIdx === 0 ? 'p1-p1-pawn' : 'p2-pawn'}`;
+                        // Add class specifically for color since we construct className
+                        el.classList.add(pIdx === 0 ? 'p1-pawn' : 'p2-pawn');
+                        el.innerText = pawnIdx + 1;
+                        container.appendChild(el);
+                    }
+
+                    const pos = getCoords(tile);
+                    let offsetX = 0;
+                    if (pIdx === 1) offsetX = 5; 
+                    if (pawnIdx === 1) offsetX += 5;
+                    
+                    // Update position - CSS transition handles the animation
+                    el.style.left = (pos.x - 9 + offsetX) + 'px';
+                    el.style.top = (pos.y - 9) + 'px';
+
+                    // Z-Index Logic: My pawns always on top
+                    if (pIdx === myPlayerIndex) {
+                        el.style.zIndex = 50; 
+                    } else {
+                        el.style.zIndex = 1;
+                    }
+
+                    // Interaction
+                    el.classList.remove('selectable');
+                    el.onclick = null;
+
+                    if (pIdx === myPlayerIndex && canMove) {
+                        el.classList.add('selectable');
+                        el.onclick = () => movePawn(pawnIdx);
+                    }
+                });
+            });
+        }
+
+        function renderLogs(logs) {
+            const logDiv = document.getElementById('logs');
+            logDiv.innerHTML = logs.slice(-10).reverse().map(l => `<div>> ${l}</div>`).join('');
+        }
+
+        function drawBoardGraphics(config) {
+            const svg = document.getElementById('board-svg');
+            
+            for (const [start, end] of Object.entries(config.ladders)) {
+                const s = getCoords(parseInt(start));
+                const e = getCoords(end);
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                line.setAttribute('x1', s.x);
+                line.setAttribute('y1', s.y);
+                line.setAttribute('x2', e.x);
+                line.setAttribute('y2', e.y);
+                line.setAttribute('stroke', '#8B4513');
+                line.setAttribute('stroke-width', '6');
+                line.setAttribute('stroke-linecap', 'round');
+                const line2 = line.cloneNode();
+                line2.setAttribute('stroke', '#deb887');
+                line2.setAttribute('stroke-width', '2');
+                line2.setAttribute('stroke-dasharray', '4');
+                svg.appendChild(line);
+                svg.appendChild(line2);
+            }
+
+            for (const [start, end] of Object.entries(config.snakes)) {
+                const s = getCoords(parseInt(start));
+                const e = getCoords(end);
+                const cx = (s.x + e.x) / 2 + 30;
+                const cy = (s.y + e.y) / 2;
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', `M ${s.x} ${s.y} Q ${cx} ${cy} ${e.x} ${e.y}`);
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', '#22c55e');
+                path.setAttribute('stroke-width', '6');
+                path.setAttribute('stroke-linecap', 'round');
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', s.x);
+                circle.setAttribute('cy', s.y);
+                circle.setAttribute('r', '5');
+                circle.setAttribute('fill', 'red');
+                svg.appendChild(path);
+                svg.appendChild(circle);
+            }
+        }
+    </script>
+</body>
+</html>
