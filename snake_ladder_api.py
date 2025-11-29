@@ -396,7 +396,7 @@ def computer_turn(
                         if current_positions[pawn_idx] < current_positions[pawn_to_move]:
                             pawn_to_move = pawn_idx
                     else:
-                        pawn_to_move = 0
+                        pawn_to_move = available_pawns[0]
 
             pawn_index = pawn_to_move
         
