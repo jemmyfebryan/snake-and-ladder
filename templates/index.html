@@ -48,10 +48,29 @@
                     <h2 id="turn-text">Waiting for opponent...</h2>
                     <p id="instruction-text">Share the Room ID to start.</p>
                 </div>
-
                 <div>
-                    <button id="play-comp-btn" class="btn-primary" onclick="playComputer()">Play with Computer</button>
+                    <button id="play-comp-btn" class="btn-primary" onclick="showDifficultyMenu()">
+                        Play with Computer
+                    </button>
                 </div>
+
+                <!-- Difficulty Popup Modal -->
+                <div id="difficulty-modal" class="difficulty-modal-overlay" style="display:none;">
+                    <div class="difficulty-modal">
+                        <h2>Select Difficulty</h2>
+
+                        <div class="difficulty-cards">
+                            <div class="difficulty-card" onclick="selectDifficulty('easy')">Easy</div>
+                            <div class="difficulty-card" onclick="selectDifficulty('normal')">Normal</div>
+                            <div class="difficulty-card" onclick="selectDifficulty('hard')">Hard</div>
+                            <div class="difficulty-card" onclick="selectDifficulty('extreme')">Extreme</div>
+                        </div>
+
+                        <button class="close-btn" onclick="closeDifficultyMenu()">Cancel</button>
+                    </div>
+                </div>
+
+
 
                 <div class="dice-area">
                     <div class="dice-val" id="dice-display">🎲</div>
@@ -74,15 +93,29 @@
         let myPlayerIndex = -1; // 0 or 1
         let pollingInterval = null;
         let isRolling = false;
-
+        
+        // Replace the existing function in index.html with this:
         function getCoords(tileNum) {
-            if (tileNum <= 0) return { x: -20, y: 480 };
+            // Get the current actual width of the board container
+            const boardWidth = document.querySelector('.board-container').clientWidth;
+            // Calculate the size of a single tile (board is 10x10)
+            const tileSize = boardWidth / 10;
+            // The center offset for the pawn
+            const centerOffset = tileSize / 2;
+
+            if (tileNum <= 0) return { x: -centerOffset, y: boardWidth - centerOffset };
             if (tileNum > 100) tileNum = 100;
+
             const row = Math.floor((tileNum - 1) / 10);
             let col = (tileNum - 1) % 10;
+            
+            // Logic for alternating rows (Snakes & Ladders board numbering)
             if (row % 2 !== 0) col = 9 - col;
-            const x = col * 50 + 25;
-            const y = (9 - row) * 50 + 25;
+            
+            // Calculate x and y based on dynamic tile size
+            const x = col * tileSize + centerOffset;
+            const y = (9 - row) * tileSize + centerOffset; // Y starts from the bottom (row 0 is bottom row of tiles)
+            
             return { x, y };
         }
 
@@ -132,7 +165,7 @@
             }
         }
 
-        async function playComputer() {
+        async function playComputer(level) {
             const id = document.getElementById('display-room-id').innerText;
             // console.log(id)
             if(!id) return;
@@ -142,7 +175,7 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         room_id: id,
-                        computer_difficulty: "easy"
+                        computer_difficulty: level
                     })
                 });
                 if (!res.ok) throw new Error(await res.text());
@@ -394,6 +427,19 @@
                 svg.appendChild(path);
                 svg.appendChild(circle);
             }
+        }
+        
+        function showDifficultyMenu() {
+            document.getElementById("difficulty-modal").style.display = "flex";
+        }
+
+        function closeDifficultyMenu() {
+            document.getElementById("difficulty-modal").style.display = "none";
+        }
+
+        function selectDifficulty(level) {
+            closeDifficultyMenu();
+            playComputer(level);
         }
     </script>
 </body>

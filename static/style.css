@@ -212,3 +212,127 @@ button:active { transform: scale(0.98); }
     border-radius: 50%;
     margin-right: 5px;
 }
+
+/* Modal Overlay Background */
+.difficulty-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+}
+
+/* Popup Box */
+.difficulty-modal {
+    background: #121212;
+    padding: 25px 30px;
+    border-radius: 14px;
+    width: 350px;
+    text-align: center;
+    border: 1px solid #333;
+    box-shadow: 0 0 20px rgba(0,0,0,0.6);
+}
+
+.difficulty-modal h2 {
+    margin-bottom: 20px;
+    color: #fff;
+}
+
+/* Cards inside popup */
+.difficulty-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.difficulty-card {
+    padding: 15px;
+    border-radius: 10px;
+    background: #1d1d1d;
+    border: 1px solid #2f2f2f;
+    color: #eee;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+    user-select: none;
+}
+
+.difficulty-card:hover {
+    background: #262626;
+    border-color: #555;
+    transform: translateY(-3px);
+}
+
+/* Cancel Button */
+.close-btn {
+    margin-top: 20px;
+    padding: 10px 18px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: #ddd;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.close-btn:hover {
+    background: #333;
+}
+
+/* .difficulty-card[data-level="easy"] { border-color: #4caf50; }
+.difficulty-card[data-level="normal"] { border-color: #2196f3; }
+.difficulty-card[data-level="hard"] { border-color: #ff9800; }
+.difficulty-card[data-level="extreme"] { border-color: #f44336; }
+
+.difficulty-card[data-level="easy"]:hover { background:#223322; }
+.difficulty-card[data-level="normal"]:hover { background:#1f2b3d; }
+.difficulty-card[data-level="hard"]:hover { background:#3d2b1f; }
+.difficulty-card[data-level="extreme"]:hover { background:#3d1f1f; } */
+
+/* Add this at the end of style.css */
+
+/* --- Responsive Layout Adjustments --- */
+@media (max-width: 850px) {
+    .container {
+        padding: 10px;
+    }
+
+    #game-ui {
+        /* Change from flex-wrap: wrap to flex-direction: column for stacking */
+        flex-direction: column;
+        align-items: center; /* Center items in column layout */
+        gap: 15px;
+    }
+
+    .board-container {
+        /* Make the board size responsive based on viewport width */
+        width: 90vw; /* 90% of viewport width */
+        height: 90vw; /* Keep it square */
+        /* Ensure it doesn't exceed a reasonable max size */
+        max-width: 500px;
+        max-height: 500px;
+        margin: 0 auto; /* Center the board */
+        border: 2px solid #555; /* Reduce border size for small screens */
+    }
+
+    .controls {
+        min-width: unset; /* Remove min-width restriction */
+        width: 95%; /* Take up most of the container width */
+        padding: 15px;
+    }
+
+    .dice-val {
+        font-size: 32px; /* Slightly smaller dice text */
+    }
+
+    #logs {
+        height: 150px; /* Shorter log area */
+    }
+
+    .difficulty-modal {
+        width: 90%; /* Modal takes up more space on mobile */
+    }
+}

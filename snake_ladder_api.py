@@ -29,7 +29,7 @@ app.add_middleware(
 )
 
 # --- Configuration ---
-PAWNS_PER_PLAYER = 2
+PAWNS_PER_PLAYER = 3
 WINNING_TILE = 100
 DB_FILE = "snakeladder.db"
 
@@ -78,6 +78,9 @@ class ActionRequest(BaseModel):
     room_id: str
     player_token: str
     pawn_index: Optional[int] = None
+    modifier: Optional[dict] = {
+        "dice_prob": None
+    }
 
 # --- Helpers ---
 def generate_room_id():
@@ -216,87 +219,283 @@ def play_computer(payload: PlayComputerPayload):
     print(game.players)
     save_game(game)
     return {"player_token": player_token}
-    
+
+def computer_turn(
+    game: GameState,
+    room_id: str,
+    computer_token: str
+):
+    # Loop to handle rolling a 6 and getting another turn
+    while game.status == "playing" and game.players[game.turn_index] == computer_token:
+        computer_difficulty = computer_token.split(sep="_")[-1]
+        player_index = 1
+        current_positions = game.positions[player_index]
+        print(current_positions)
+            
+        if computer_difficulty == "easy":
+            dice_prob = {
+                1: 0.2857,
+                2: 0.2381,
+                3: 0.1905,
+                4: 0.1429,
+                5: 0.0952,
+                6: 0.0476,
+            }
+        elif computer_difficulty == "hard":
+            # Double prob to win when just one dice away
+            if min(current_positions) >= 94:
+                dice_to_win = 100 - min(current_positions)
+                dice_prob = {
+                    1: 0.1666,
+                    2: 0.1666,
+                    3: 0.1667,
+                    4: 0.1667,
+                    5: 0.1667,
+                    6: 0.1667,
+                }
+                dice_prob[dice_to_win] *= 2
+            else:
+                dice_prob = {
+                    1: 0.0476,
+                    2: 0.0952,
+                    3: 0.1429,
+                    4: 0.1905,
+                    5: 0.2381,
+                    6: 0.2857,
+                }
+        elif computer_difficulty == "extreme":
+            # triple prob to win when just one dice away
+            # Even unfair dice (quadratic)
+            if min(current_positions) >= 94:
+                dice_to_win = 100 - min(current_positions)
+                dice_prob = {
+                    1: 0.1666,
+                    2: 0.1666,
+                    3: 0.1667,
+                    4: 0.1667,
+                    5: 0.1667,
+                    6: 0.1667,
+                }
+                dice_prob[dice_to_win] *= 3
+            else:
+                dice_prob = {
+                    1: 0.0110,
+                    2: 0.0440,
+                    3: 0.0989,
+                    4: 0.1758,
+                    5: 0.2747,
+                    6: 0.3956,
+                }
+        else:
+            dice_prob = None
+        
+        # --- ROLL Action ---
+        roll_req = ActionRequest(
+            room_id=room_id,
+            player_token=computer_token,
+            modifier={"dice_prob": dice_prob}
+        )
+        # Call the logic directly, avoiding HTTP
+        try:
+            game = process_roll_logic(game, roll_req)
+        except ValueError as e:
+            # If for some reason the roll is invalid, break the loop
+            print(f"Computer Roll Error: {e}")
+            break
+        
+        save_game(game)
+        
+        # After saving the roll, reload the state to ensure the logic works on a fresh view 
+        # (Though not strictly necessary in this direct call flow, it's good practice
+        # if the logic was more complex or involved dependencies)
+        # game = load_game(room_id)
+        
+        last_roll = game.last_roll
+        
+        if computer_difficulty == "easy":
+            pawn_index = [pi for pi in range(PAWNS_PER_PLAYER) if not game.finished_pawns[player_index][pi]]
+            pawn_to_move = random.choice(pawn_index) if pawn_index else 0
+        elif computer_difficulty == "normal" or computer_difficulty == "hard" or computer_difficulty == "extreme":
+            # Normal Difficulty = move but prevent pawn with snake,
+            # prioritize pawn to the next ladder,
+            # prevent one pawn to be finished first, wait all pawn on the 90-100 area
+            
+            # Hard roll higher dice more likely
+            
+            # 1. Identify non-finished pawns
+            available_pawns = [
+                pi for pi in range(PAWNS_PER_PLAYER)
+                if not game.finished_pawns[player_index][pi]
+            ]
+
+            if not available_pawns:
+                pawn_to_move = 0 # Should not happen if game is still active
+            else:
+                best_move = -1
+                max_priority = -1
+                
+                # --- Move Evaluation ---
+                for pawn_idx in available_pawns:
+                    current_pos = current_positions[pawn_idx]
+                    new_pos = current_pos + last_roll
+                    priority = 0
+
+                    # Check if moving is even possible (not overshooting 100)
+                    if new_pos > WINNING_TILE:
+                        # Lowest priority: stay put
+                        priority = 0
+                    else:
+                        # Check the tile landed on after the move
+                        landed_pos = new_pos
+                        
+                        # 1. Base Priority: Progress (Simply moving forward)
+                        # priority = new_pos 
+                        
+                        str_new_pos = str(new_pos)
+                        
+                        # 2. Prevent Snake: Check if the *new_pos* is a snake head
+                        if str_new_pos in game.board_config['snakes']:
+                            priority -= 100 # Heavy penalty for landing on a snake
+                            landed_pos = game.board_config['snakes'][str_new_pos]
+                        
+                        # 3. Prioritize Ladder: Check if the *new_pos* is a ladder bottom
+                        elif str_new_pos in game.board_config['ladders']:
+                            priority += 100 # Strong bonus for landing on a ladder
+                            landed_pos = game.board_config['ladders'][str_new_pos]
+                        
+                        # 4. End Game Management: Prioritize moving all pawns to 90-99 area,
+                        #    and only finish one if all others are also near the end.
+                        #    Note: This simplified version will mainly focus on the "don't finish first" part,
+                        #          and prioritizing progress to 90+ area for all.
+                        
+                        finished_count = sum(game.finished_pawns[player_index])
+                        all_near_end = all(p >= 90 for i, p in enumerate(current_positions) if not game.finished_pawns[player_index][i] or i == pawn_idx)
+
+                        if new_pos == WINNING_TILE:
+                            # Prevent one pawn to be finished first
+                            if finished_count == 0 and not all_near_end:
+                                # Heavy penalty if this is the first finish and others aren't near the end (90+)
+                                priority -= 200
+                            else:
+                                # High bonus if it's safe to finish
+                                priority += 300 
+                        
+                        # If this move brings the pawn close to the end (90+), give a moderate bonus
+                        elif new_pos >= 90 and current_pos < 90:
+                            priority += 20
+                            
+                        # The final position after snake/ladder also affects priority
+                        # if landed_pos > priority:
+                        #     priority = landed_pos
+
+                    if priority > max_priority:
+                        max_priority = priority
+                        pawn_to_move = pawn_idx
+                    elif priority == max_priority and pawn_idx in available_pawns:
+                        # Tie-breaker: choose the pawn that is currently furthest back,
+                        # to keep the pawns clustered for the end-game waiting strategy.
+                        if current_positions[pawn_idx] < current_positions[pawn_to_move]:
+                            pawn_to_move = pawn_idx
+                    else:
+                        pawn_to_move = 0
+
+            pawn_index = pawn_to_move
+        
+        # --- MOVE Action ---
+        move_req = ActionRequest(
+            room_id=room_id,
+            player_token=computer_token,
+            pawn_index=pawn_to_move
+        )
+
+        # Call the logic directly, avoiding HTTP
+        try:
+            game = process_move_logic(game, move_req)
+        except ValueError as e:
+            print(f"Computer Move Error: {e}")
+            break
+
+        save_game(game)
+        # Reload the game state to check if turn has changed for the next loop iteration
+        game = load_game(room_id)
+        
+        # The loop condition will now check if it's still the computer's turn 
+        # (i.e., if last_roll was 6 or if the game ended)
+    return game # The function returns the final state after the computer's turn(s)
 
 @app.get("/state/{room_id}")
 def get_state(room_id: str):
     game = load_game(room_id)
     
     # When plays against computer, roll dice and move random pawn
-    if game.players[1].startswith("computer") and game.turn_index == 1:
-        room_id = game.room_id
-        computer_token = game.players[1]
-        pawn_index = [pi for pi in range(PAWNS_PER_PLAYER) if not game.finished_pawns[1][pi]]
-        if pawn_index:
-            pawn_index = random.choice(pawn_index)
-        else:
-            pawn_index = 0
-        # Roll a Dice
-        with httpx.Client() as client:
-            response = client.post("http://127.0.0.1:8080/roll", json={
-                "room_id": room_id,
-                "player_token": computer_token
-            })
-            response.raise_for_status()
-            response = client.post("http://127.0.0.1:8080/move", json={
-                "room_id": room_id,
-                "player_token": computer_token,
-                "pawn_index": pawn_index
-            })
-            response.raise_for_status()
+    if len(game.players) > 1:
+        if game.players[1].startswith("computer") and game.turn_index == 1:
+            computer_token = game.players[1]
+            computer_turn(
+                game=game,
+                room_id=room_id,
+                computer_token=computer_token,
+            )
     
     if not game:
         raise HTTPException(404, "Room not found")
     return game
 
-@app.post("/roll")
-def roll_dice(req: ActionRequest):
-    game = load_game(req.room_id)
-    if not game:
-        raise HTTPException(404, "Room not found")
-        
-    if game.status != "playing":
-        raise HTTPException(400, "Game not active")
-        
-    if game.players[game.turn_index] != req.player_token:
-        raise HTTPException(400, "Not your turn")
-        
-    if game.phase != "ROLL":
-        raise HTTPException(400, "Already rolled, waiting for move")
+# --- Helpers for Core Game Logic ---
+
+# New helper for the roll logic (no API/request handling)
+def process_roll_logic(game: GameState, req: ActionRequest) -> GameState:
+    """Calculates the roll and updates game state without HTTP logic."""
     
+    # Validation checks from the original /roll (simplified for internal use)
+    if game.status != "playing":
+        raise ValueError("Game not active")
+    if game.players[game.turn_index] != req.player_token:
+        # This check is what's causing the 400 error in your current setup!
+        raise ValueError("Not computer's turn") 
+    if game.phase != "ROLL":
+        raise ValueError("Already rolled, waiting for move")
+
     entity = "Computer" if game.players[game.turn_index].startswith("computer") else "Player"
-        
-    roll = random.randint(1, 6)
+    
+    if req.modifier.get("dice_prob", {}):
+        values = list(req.modifier.get("dice_prob").keys())
+        probs = list(req.modifier.get("dice_prob").values())
+        # Convert keys to int, as they were strings in the original dict
+        roll = random.choices([int(v) for v in values], probs)[0] 
+    else:
+        roll = random.randint(1, 6)
     game.last_roll = roll
     game.phase = "MOVE"
     game.log.append(f"{entity} {game.turn_index + 1} rolled a {roll}")
     
-    save_game(game)
     return game
 
-@app.post("/move")
-def move_pawn(req: ActionRequest):
-    game = load_game(req.room_id)
-    if not game or req.pawn_index is None:
-        raise HTTPException(400, "Invalid request")
-        
+# New helper for the move logic (no API/request handling)
+def process_move_logic(game: GameState, req: ActionRequest) -> GameState:
+    """Calculates the move and updates game state without HTTP logic."""
+    
+    # Validation checks from the original /move (simplified for internal use)
+    if req.pawn_index is None:
+        raise ValueError("Invalid request: pawn_index missing")
     if game.phase != "MOVE":
-        raise HTTPException(400, "Must roll first")
-        
+        raise ValueError("Must roll first")
     if game.players[game.turn_index] != req.player_token:
-        raise HTTPException(400, "Not your turn")
+        # This check is what's causing the 400 error in your current setup!
+        raise ValueError("Not computer's turn") 
         
     pawn_idx = req.pawn_index
     current_player = game.turn_index
     entity = "Computer" if game.players[current_player].startswith("computer") else "Player"
     
+    # ... (rest of the /move logic from line 419)
     if pawn_idx < 0 or pawn_idx >= PAWNS_PER_PLAYER:
-        raise HTTPException(400, "Invalid pawn")
+        raise ValueError("Invalid pawn")
         
     current_pos = game.positions[current_player][pawn_idx]
     
     if game.finished_pawns[current_player][pawn_idx]:
-        raise HTTPException(400, "Pawn already finished")
+        raise ValueError("Pawn already finished")
         
     roll = game.last_roll
     new_pos = current_pos + roll
@@ -336,5 +535,35 @@ def move_pawn(req: ActionRequest):
             
     game.phase = "ROLL"
     game.last_roll = None
+
+    return game
+
+@app.post("/roll")
+def roll_dice(req: ActionRequest):
+    game = load_game(req.room_id)
+    if not game:
+        raise HTTPException(404, "Room not found")
+    
+    # Use the logic helper
+    try:
+        game = process_roll_logic(game, req)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+        
+    save_game(game)
+    return game
+
+@app.post("/move")
+def move_pawn(req: ActionRequest):
+    game = load_game(req.room_id)
+    if not game:
+        raise HTTPException(404, "Room not found")
+    
+    # Use the logic helper
+    try:
+        game = process_move_logic(game, req)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+        
     save_game(game)
     return game
