@@ -5,12 +5,19 @@ import string
 import uuid
 import os
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+import httpx
 
 app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+templates = Jinja2Templates(directory="templates")
 
 # Enable CORS (still useful if you decide to host frontend elsewhere later)
 app.add_middleware(
@@ -59,6 +66,13 @@ class CreateGameResponse(BaseModel):
 
 class JoinGameResponse(BaseModel):
     player_token: str
+
+class PlayComputerResponse(BaseModel):
+    player_token: str
+    
+class PlayComputerPayload(BaseModel):
+    room_id: str
+    computer_difficulty: str
     
 class ActionRequest(BaseModel):
     room_id: str
@@ -108,12 +122,14 @@ def load_game(room_id: str) -> Optional[GameState]:
 # --- Endpoints ---
 
 @app.get("/", response_class=HTMLResponse)
-def read_root():
+def read_root(request: Request):
     """Serves the frontend HTML file."""
-    if os.path.exists("index.html"):
-        with open("index.html", "r", encoding="utf-8") as f:
-            return f.read()
-    return "<h1>Error: index.html not found in the same directory.</h1>"
+    return templates.TemplateResponse("index.html", {"request": request})
+
+    # if os.path.exists("index.html"):
+    #     with open("index.html", "r", encoding="utf-8") as f:
+    #         return f.read()
+    # return "<h1>Error: index.html not found in the same directory.</h1>"
 
 @app.post("/create", response_model=CreateGameResponse)
 def create_game():
@@ -150,9 +166,58 @@ def join_game(room_id: str = Body(..., embed=True)):
     save_game(game)
     return {"player_token": player_token}
 
+@app.post("/play_computer", response_model=PlayComputerResponse)
+def play_computer(payload: PlayComputerPayload):
+    # print(payload)
+    room_id = payload.room_id
+    computer_difficulty = payload.computer_difficulty
+    
+    if computer_difficulty not in ["easy", "normal", "hard", "extreme"]:
+        raise HTTPException(500, "difficulty invalid, only accepts 'easy', 'normal', 'hard', 'extreme'")
+    
+    game = load_game(room_id)
+    if not game:
+        raise HTTPException(404, "Room not found")
+    
+    if len(game.players) >= 2:
+        raise HTTPException(400, "Room is full")
+    
+    player_token = f"computer_{computer_difficulty}"
+    game.players.append(player_token)
+    game.status = "playing"
+    game.log.append(f"Computer {computer_difficulty} joined. Game Start!")
+    print(game.players)
+    save_game(game)
+    return {"player_token": player_token}
+    
+
 @app.get("/state/{room_id}")
 def get_state(room_id: str):
     game = load_game(room_id)
+    
+    # When plays against computer, roll dice and move random pawn
+    if game.players[1].startswith("computer") and game.turn_index == 1:
+        room_id = game.room_id
+        computer_token = game.players[1]
+        pawn_index = [pi for pi in range(PAWNS_PER_PLAYER) if not game.finished_pawns[1][pi]]
+        if pawn_index:
+            pawn_index = random.choice(pawn_index)
+        else:
+            pawn_index = 0
+        # Roll a Dice
+        with httpx.Client() as client:
+            response = client.post("http://127.0.0.1:8080/roll", json={
+                "room_id": room_id,
+                "player_token": computer_token
+            })
+            response.raise_for_status()
+            response = client.post("http://127.0.0.1:8080/move", json={
+                "room_id": room_id,
+                "player_token": computer_token,
+                "pawn_index": pawn_index
+            })
+            response.raise_for_status()
+    
     if not game:
         raise HTTPException(404, "Room not found")
     return game
@@ -171,11 +236,13 @@ def roll_dice(req: ActionRequest):
         
     if game.phase != "ROLL":
         raise HTTPException(400, "Already rolled, waiting for move")
+    
+    entity = "Computer" if game.players[game.turn_index].startswith("computer") else "Player"
         
     roll = random.randint(1, 6)
     game.last_roll = roll
     game.phase = "MOVE"
-    game.log.append(f"Player {game.turn_index + 1} rolled a {roll}")
+    game.log.append(f"{entity} {game.turn_index + 1} rolled a {roll}")
     
     save_game(game)
     return game
@@ -194,6 +261,7 @@ def move_pawn(req: ActionRequest):
         
     pawn_idx = req.pawn_index
     current_player = game.turn_index
+    entity = "Computer" if game.players[current_player].startswith("computer") else "Player"
     
     if pawn_idx < 0 or pawn_idx >= PAWNS_PER_PLAYER:
         raise HTTPException(400, "Invalid pawn")
@@ -222,22 +290,22 @@ def move_pawn(req: ActionRequest):
             new_pos = final_pos
             
         game.positions[current_player][pawn_idx] = new_pos
-        game.log.append(f"Player {current_player+1} moved Pawn {pawn_idx+1} to {new_pos} {landed_msg}")
+        game.log.append(f"{entity} {current_player+1} moved Pawn {pawn_idx+1} to {new_pos} {landed_msg}")
 
         if new_pos == WINNING_TILE:
             game.finished_pawns[current_player][pawn_idx] = True
-            game.log.append(f"Player {current_player+1}'s Pawn {pawn_idx+1} Finished!")
+            game.log.append(f"{entity} {current_player+1}'s Pawn {pawn_idx+1} Finished!")
 
     if all(game.finished_pawns[current_player]):
         game.status = "finished"
         game.winner = current_player
-        game.log.append(f"PLAYER {current_player+1} WINS!")
+        game.log.append(f"{entity.upper()} {current_player+1} WINS!")
     
     if game.status != "finished":
         if game.last_roll != 6:
             game.turn_index = 1 - game.turn_index
         else:
-            game.log.append(f"Player {current_player+1} rolled 6, goes again!")
+            game.log.append(f"{entity} {current_player+1} rolled 6, goes again!")
             
     game.phase = "ROLL"
     game.last_roll = None

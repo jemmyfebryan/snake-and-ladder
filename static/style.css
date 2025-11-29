@@ -1,0 +1,214 @@
+:root {
+    --p1-color: #3b82f6;
+    --p2-color: #ef4444;
+    --board-bg: #1e1e1e;
+    --tile-1: #2a2a2a;
+    --tile-2: #242424;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #0f172a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px;
+    color: #e2e8f0;
+}
+
+.container {
+    max-width: 1000px;
+    width: 100%;
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    color: #e2e8f0;
+}
+
+/* --- Lobby Styles --- */
+#lobby {
+    text-align: center;
+    padding: 50px;
+}
+
+input {
+    padding: 10px;
+    border: 1px solid #475569;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 6px;
+    margin-right: 10px;
+    font-size: 16px;
+}
+
+button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 16px;
+    transition: transform 0.1s;
+}
+
+button:active { transform: scale(0.98); }
+.btn-primary { background: #059669; color: white; }
+.btn-secondary { background: #4f46e5; color: white; }
+
+/* --- Game Styles --- */
+#game-ui {
+    display: none;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.board-container {
+    position: relative;
+    width: 500px;
+    height: 500px;
+    border: 4px solid #555;
+    background: var(--board-bg);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    grid-template-rows: repeat(10, 1fr);
+    width: 100%;
+    height: 100%;
+}
+
+.tile {
+    border: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    font-size: 10px;
+    padding: 2px;
+    position: relative;
+    color: #94a3b8;
+}
+
+.tile:nth-child(even) { background-color: var(--tile-1); }
+.tile:nth-child(odd) { background-color: var(--tile-2); }
+
+#board-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.pawn {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid #1e1e1e;
+    position: absolute;
+    transition: top 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: white;
+    font-weight: bold;
+}
+
+.pawn.selectable {
+    cursor: pointer;
+    box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.4);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+@keyframes rollShake {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(10deg); }
+    50% { transform: rotate(-10deg); }
+    75% { transform: rotate(5deg); }
+    100% { transform: rotate(0deg); }
+}
+
+.rolling {
+    animation: rollShake 0.2s infinite;
+}
+
+.p1-pawn { background-color: var(--p1-color); }
+.p2-pawn { background-color: var(--p2-color); }
+
+.controls {
+    flex: 1;
+    min-width: 300px;
+    padding: 20px;
+    background: #0f172a;
+    border-radius: 8px;
+    color: #e2e8f0;
+}
+
+.status-box {
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 8px;
+    background: #1e293b;
+    border-left: 5px solid #334155;
+}
+
+.status-box.active-turn { border-left-color: #10b981; }
+.status-box.wait-turn { border-left-color: #f59e0b; }
+
+.dice-area {
+    text-align: center;
+    margin: 20px 0;
+}
+
+.dice-val {
+    font-size: 40px;
+    font-weight: bold;
+    margin: 10px 0;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #e2e8f0;
+}
+
+#logs {
+    height: 200px;
+    overflow-y: auto;
+    background: #0f172a;
+    color: #94a3b8;
+    padding: 10px;
+    border-radius: 6px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.room-tag {
+    background: #334155;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    color: #e2e8f0;
+}
+
+.pawn-legend {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
