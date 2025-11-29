@@ -88,19 +88,46 @@ def generate_board():
     ladders = {}
     
     # Create Ladders
-    for _ in range(6):
+    while len(ladders) < 5:
         start = random.randint(2, 80)
-        end = random.randint(start + 10, 98)
-        if start not in ladders and end not in ladders.values():
+        end = random.randint(start + 10, 94)
+        if (
+            str(start) not in ladders
+            and end not in ladders.values()
+            and start not in ladders.values()
+            and str(end) not in ladders
+        ):
             ladders[str(start)] = end
             
     # Create Snakes
-    for _ in range(6):
-        start = random.randint(15, 98)
+    while len(snakes) < 4:
+        start = random.randint(15, 97)
         end = random.randint(2, start - 10)
-        if (str(start) not in ladders and str(start) not in snakes and 
-            end not in ladders and end not in snakes.values()):
+        if (
+            str(start) not in ladders
+            and str(start) not in snakes
+            and start not in ladders.values()
+            and str(end) not in ladders
+            and end not in snakes.values()
+            and start not in snakes.values()
+            and str(end) not in snakes
+        ):
             snakes[str(start)] = end
+    
+    # One snake guaranteed to be within 96-99
+    start = random.randint(98, 99)
+    end = random.randint(50, start - 10)
+    if (
+        str(start) not in ladders
+        and str(start) not in snakes
+        and start not in ladders.values()
+        and str(end) not in ladders
+        and end not in snakes.values()
+        and start not in snakes.values()
+        and str(end) not in snakes
+    ):
+        snakes[str(start)] = end
+    
             
     return {"snakes": snakes, "ladders": ladders}
 
